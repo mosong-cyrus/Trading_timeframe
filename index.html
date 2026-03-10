@@ -1,575 +1,537 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trading Timeframes & Real-Time Clock</title>
-    <style>
-        @keyframes moveTitle {
-            0% { 
-                transform: translateX(100%); 
-                opacity: 0;
-            }
-            5% { 
-                opacity: 1;
-            }
-            95% { 
-                opacity: 1;
-            }
-            100% { 
-                transform: translateX(-100%); 
-                opacity: 0;
-            }
-        }
-        .moving-title {
-            animation: moveTitle 25s linear infinite; /* Slowed for smoother feel */
-            white-space: nowrap;
-        }
-        /* Ensure tables are scrollable on mobile with enhanced touch */
-        @media (max-width: 768px) {
-            .table-container {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                scrollbar-width: thin;
-                scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
-            }
-            .table-container::-webkit-scrollbar {
-                height: 6px;
-            }
-            .table-container::-webkit-scrollbar-thumb {
-                background-color: rgba(148, 163, 184, 0.5);
-                border-radius: 3px;
-            }
-        }
-        /* Enhanced pulse for current row and timers */
-        @keyframes gentlePulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        .gentle-pulse {
-            animation: gentlePulse 2s ease-in-out infinite;
-        }
-        /* Horizontal highlight styles for current and next rows - responsive height */
-        .current-row-highlight, .next-row-highlight {
-            position: relative;
-        }
-        .current-row-highlight::before, .next-row-highlight::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            border-radius: 2px 2px 0 0;
-            z-index: 10;
-        }
-        .current-row-highlight::before {
-            background: linear-gradient(to right, transparent, #fbbf24, transparent);
-        }
-        .next-row-highlight::before {
-            background: linear-gradient(to right, transparent, #f97316, transparent); /* Orange for next */
-        }
-        /* Responsive enhancements */
-        @media (max-width: 640px) {
-            .current-row-highlight::before, .next-row-highlight::before {
-                height: 3px;
-            }
-        }
-    </style>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>FX Trading Timeframes — Live Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060b14;--bg1:#0a1120;--bg2:#0f1929;
+  --b1:rgba(255,255,255,0.06);--b2:rgba(255,255,255,0.1);
+  --green:#00e087;--cyan:#00cfff;--violet:#9b6dff;
+  --amber:#ffb800;--orange:#ff7c3a;--rose:#ff5c7a;--sky:#38d0ff;
+  --dim:#2a3a50;--muted:#3d5068;--soft:#6b8099;--base:#8fa3b8;--bright:#c8d8e8;--white:#eef4f9;
+  --mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--bg);color:var(--base);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,224,135,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,224,135,0.025) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 40% at 15% 0%,rgba(0,224,135,0.06) 0%,transparent 60%),radial-gradient(ellipse 50% 50% at 85% 90%,rgba(0,207,255,0.05) 0%,transparent 60%),radial-gradient(ellipse 80% 80% at 50% 50%,rgba(6,11,20,0.85) 0%,transparent 80%);pointer-events:none;z-index:0}
+
+@keyframes marquee{from{transform:translateX(100vw)}to{transform:translateX(-100%)}}
+@keyframes clockGlow{0%,100%{filter:drop-shadow(0 0 20px rgba(0,224,135,0.45))}50%{filter:drop-shadow(0 0 35px rgba(0,207,255,0.55))}}
+@keyframes nowBeat{0%,100%{box-shadow:0 0 0 0 rgba(255,184,0,0.4),inset 3px 0 0 var(--amber)}50%{box-shadow:0 0 0 6px rgba(255,184,0,0),inset 3px 0 0 var(--amber)}}
+@keyframes nextGlow{0%,100%{box-shadow:inset 3px 0 0 var(--orange)}50%{box-shadow:inset 3px 0 0 var(--orange),0 0 18px rgba(255,124,58,0.12)}}
+@keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
+@keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
+
+.mq-wrap{overflow:hidden}.mq-inner{display:inline-block;white-space:nowrap;animation:marquee 34s linear infinite}
+.ping-dot{width:7px;height:7px;border-radius:50%;display:inline-block;position:relative;flex-shrink:0}
+.ping-dot::after{content:'';position:absolute;inset:0;border-radius:50%;animation:ping 1.3s cubic-bezier(0,0,.2,1) infinite}
+.pa{background:var(--amber)}.pa::after{background:var(--amber)}
+.po{background:var(--orange)}.po::after{background:var(--orange)}
+
+.scanline-c{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden;opacity:.03}
+.scanline{position:absolute;width:100%;height:3px;background:linear-gradient(transparent,rgba(0,224,135,0.9),transparent);animation:scanline 7s linear infinite}
+
+.app{position:relative;z-index:2;padding:12px;min-height:100vh}
+.wrap{max-width:1140px;margin:0 auto;display:flex;flex-direction:column;gap:11px}
+
+.card{background:var(--bg1);border:1px solid var(--b1);border-radius:16px;padding:18px 20px;backdrop-filter:blur(20px)}
+.card2{background:var(--bg2);border:1px solid var(--b1);border-radius:14px;padding:16px}
+
+/* Marquee */
+.mq-bar{background:linear-gradient(90deg,#020d1e,#04162e,#020d1e);border:1px solid rgba(0,207,255,0.13);border-radius:10px;padding:7px 0;overflow:hidden}
+
+/* Clock */
+.clk-wrap{background:linear-gradient(140deg,#04090f,#080e18,#030609);border:1px solid rgba(0,224,135,0.1);border-radius:16px;padding:24px 20px 18px;text-align:center;position:relative;overflow:hidden}
+.clk-wrap::before{content:'';position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(0,224,135,0.55),rgba(0,207,255,0.55),transparent)}
+.corner{position:absolute;width:13px;height:13px;border-color:rgba(0,224,135,0.35);border-style:solid}
+.c-tl{top:9px;left:9px;border-width:2px 0 0 2px}.c-tr{top:9px;right:9px;border-width:2px 2px 0 0}
+.c-bl{bottom:9px;left:9px;border-width:0 0 2px 2px}.c-br{bottom:9px;right:9px;border-width:0 2px 2px 0}
+.clk-digits{font-family:var(--mono);font-size:clamp(44px,11vw,96px);font-weight:800;color:var(--white);letter-spacing:.06em;line-height:1;animation:clockGlow 3.2s ease-in-out infinite}
+.clk-sub{font-family:var(--mono);font-size:10px;letter-spacing:.15em;color:var(--muted);margin-top:9px;text-transform:uppercase}
+
+/* Countdown cards */
+.cd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:580px){.cd-grid{grid-template-columns:1fr}}
+.cd{border-radius:14px;padding:16px 14px;text-align:center;position:relative;overflow:hidden}
+.cd::after{content:'';position:absolute;top:0;left:0;right:0;height:1px}
+.cd-g{background:rgba(0,224,135,0.05);border:1px solid rgba(0,224,135,0.17)}.cd-g::after{background:linear-gradient(90deg,transparent,rgba(0,224,135,0.55),transparent)}
+.cd-c{background:rgba(0,207,255,0.05);border:1px solid rgba(0,207,255,0.17)}.cd-c::after{background:linear-gradient(90deg,transparent,rgba(0,207,255,0.55),transparent)}
+.cd-v{background:rgba(155,109,255,0.05);border:1px solid rgba(155,109,255,0.17)}.cd-v::after{background:linear-gradient(90deg,transparent,rgba(155,109,255,0.55),transparent)}
+.cd-lbl{font-size:9px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:5px;font-weight:700}
+.cd-g .cd-lbl{color:var(--green)}.cd-c .cd-lbl{color:var(--cyan)}.cd-v .cd-lbl{color:var(--violet)}
+.cd-t{font-family:var(--mono);font-size:clamp(22px,5vw,34px);font-weight:800;color:var(--white);letter-spacing:.04em;margin-bottom:8px;line-height:1}
+.cd-cd{font-family:var(--mono);font-size:clamp(12px,3vw,15px);font-weight:600;border-radius:8px;padding:5px 10px;display:inline-block}
+.cd-g .cd-cd{background:rgba(0,224,135,0.09);color:var(--green);border:1px solid rgba(0,224,135,0.18)}
+.cd-c .cd-cd{background:rgba(0,207,255,0.09);color:var(--cyan);border:1px solid rgba(0,207,255,0.18)}
+.cd-v .cd-cd{background:rgba(155,109,255,0.09);color:var(--violet);border:1px solid rgba(155,109,255,0.18)}
+
+/* Live status */
+.ls-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:540px){.ls-grid{grid-template-columns:1fr}}
+.ls-now{border-radius:14px;padding:16px;background:rgba(255,184,0,0.05);border:1px solid rgba(255,184,0,0.22);animation:nowBeat 2.5s ease-in-out infinite;position:relative;overflow:hidden}
+.ls-now::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--amber);border-radius:3px 0 0 3px}
+.ls-nxt{border-radius:14px;padding:16px;background:rgba(255,124,58,0.05);border:1px solid rgba(255,124,58,0.18);animation:nextGlow 2.8s ease-in-out infinite;position:relative;overflow:hidden}
+.ls-nxt::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--orange);border-radius:3px 0 0 3px}
+.ls-badge{display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;border-radius:6px;padding:3px 8px;margin-bottom:10px}
+.lsb-now{background:rgba(255,184,0,0.1);color:var(--amber);border:1px solid rgba(255,184,0,0.28)}
+.lsb-nxt{background:rgba(255,124,58,0.1);color:var(--orange);border:1px solid rgba(255,124,58,0.25)}
+.ls-time{font-family:var(--mono);font-size:26px;font-weight:800;letter-spacing:.03em;margin-bottom:8px}
+.ls-now .ls-time{color:var(--amber)}.ls-nxt .ls-time{color:var(--orange)}
+.ls-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px}
+.tg{font-family:var(--mono);font-size:9px;border-radius:5px;padding:2px 7px;white-space:nowrap}
+.tg-2{background:rgba(0,224,135,0.09);color:var(--green);border:1px solid rgba(0,224,135,0.18)}
+.tg-3{background:rgba(0,207,255,0.09);color:var(--cyan);border:1px solid rgba(0,207,255,0.18)}
+.tg-4{background:rgba(155,109,255,0.09);color:var(--violet);border:1px solid rgba(155,109,255,0.18)}
+.ls-ev{font-size:12px;font-weight:600;line-height:1.35}
+.ls-now .ls-ev{color:rgba(255,184,0,.8)}.ls-nxt .ls-ev{color:rgba(255,124,58,.8)}
+
+/* Buttons */
+.btn-row{display:flex;flex-wrap:wrap;gap:7px}
+.btn{padding:8px 15px;border-radius:10px;font-size:11px;font-weight:700;letter-spacing:.04em;cursor:pointer;border:1px solid var(--b2);background:rgba(15,25,41,0.6);color:var(--soft);transition:all .18s;font-family:var(--sans);flex:1 1 auto}
+.btn:hover{color:var(--bright);background:rgba(255,255,255,0.05)}
+.bon-all{background:linear-gradient(135deg,#1e1660,#1a3060)!important;color:#b8ccff!important;border-color:rgba(100,140,255,0.3)!important}
+.bon-h2{background:linear-gradient(135deg,#0a3020,#0c4230)!important;color:#50e8a4!important;border-color:rgba(0,224,135,0.3)!important}
+.bon-h3{background:linear-gradient(135deg,#082838,#0a3848)!important;color:#50d8f4!important;border-color:rgba(0,207,255,0.3)!important}
+.bon-h4{background:linear-gradient(135deg,#221248,#32185a)!important;color:#b898ff!important;border-color:rgba(155,109,255,0.3)!important}
+
+/* Table */
+.tbl-outer{border-radius:14px;border:1px solid var(--b1);overflow:hidden;background:var(--bg1)}
+.tbl-scroll{max-height:400px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(0,224,135,0.18) transparent}
+.tbl-scroll::-webkit-scrollbar{width:4px;height:4px}
+.tbl-scroll::-webkit-scrollbar-thumb{background:rgba(0,224,135,0.18);border-radius:4px}
+table{width:100%;border-collapse:collapse;min-width:620px}
+thead th{position:sticky;top:0;z-index:5;padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:#060c16;border-bottom:1px solid var(--b1);white-space:nowrap}
+tbody tr{border-bottom:1px solid rgba(255,255,255,0.028);transition:background .15s}
+tbody tr:hover{background:rgba(255,255,255,0.022)!important}
+tbody td{padding:9px 14px;vertical-align:middle;font-family:var(--mono);font-size:11px}
+.row-now{background:rgba(255,184,0,0.07)!important;animation:nowBeat 2.5s ease-in-out infinite}
+.row-nxt{background:rgba(255,124,58,0.05)!important;animation:nextGlow 2.8s ease-in-out infinite}
+.row-alt{background:rgba(255,255,255,0.012)}
+.ev-rose{background:rgba(255,92,122,0.05)!important;border-left:2px solid rgba(255,92,122,0.55)!important}
+.ev-orange{background:rgba(255,124,58,0.05)!important;border-left:2px solid rgba(255,124,58,0.5)!important}
+.ev-amber{background:rgba(255,184,0,0.04)!important;border-left:2px solid rgba(255,184,0,0.4)!important}
+.ev-sky{background:rgba(56,208,255,0.04)!important;border-left:2px solid rgba(56,208,255,0.38)!important}
+.ev-violet{background:rgba(155,109,255,0.05)!important;border-left:2px solid rgba(155,109,255,0.45)!important}
+.ev-green{background:rgba(0,224,135,0.04)!important;border-left:2px solid rgba(0,224,135,0.45)!important}
+.tc-t{color:var(--sky);font-weight:700;font-size:13px}
+.tc-2{color:#3ddb88}.tc-3{color:#38c8f0}.tc-4{color:#9d77f5}.tc-x{opacity:.1}
+
+/* Session grid */
+.sess-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.sess-card{border-radius:14px;padding:16px;background:var(--bg2);border:1px solid var(--b1)}
+.sess-hd{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:7px;margin-bottom:11px;padding-bottom:9px;border-bottom:1px solid var(--b1)}
+.sess-t{font-family:var(--mono);font-size:12px;font-weight:700;margin-bottom:7px}
+.pairs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.pair{font-family:var(--mono);font-size:9px;font-weight:600;border-radius:5px;padding:2px 7px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:var(--bright)}
+.sess-note{font-size:11px;color:var(--soft);line-height:1.5}
+.dot-s{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+/* Info grid */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.info-card{border-radius:14px;padding:16px;background:var(--bg2);border:1px solid var(--b1)}
+.info-hd{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.info-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.info-row:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.i-t{font-family:var(--mono);font-size:14px;font-weight:700}
+.i-l{font-size:11px;color:var(--soft)}
+
+/* Header */
+.hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.b-icon{width:40px;height:40px;border-radius:11px;flex-shrink:0;background:rgba(0,224,135,0.07);border:1px solid rgba(0,224,135,0.18);display:flex;align-items:center;justify-content:center;color:var(--green)}
+.b-title{font-size:clamp(17px,4vw,23px);font-weight:700;color:var(--white);letter-spacing:-.3px;line-height:1.1}
+.b-sub{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono)}
+select{font-family:var(--sans);font-weight:600;font-size:13px;background:rgba(8,16,30,0.9);color:var(--white);border:1px solid rgba(0,207,255,0.18);border-radius:11px;padding:9px 14px;cursor:pointer;outline:none;appearance:none;min-width:205px}
+select option{background:#0a1120}
+
+/* Section label */
+.sec{font-size:9px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.sec::after{content:'';flex:1;height:1px;background:var(--b1)}
+
+/* Footer */
+.footer{text-align:center;font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.04em;padding:12px 16px;border-radius:10px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.04);line-height:1.8}
+</style>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 </head>
 <body>
-    <div id="root"></div>
+<div class="scanline-c"><div class="scanline"></div></div>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+/* Candle open hours — BOTH timezones from 00:00 */
+const OPENS = {
+  h2:[0,2,4,6,8,10,12,14,16,18,20,22],
+  h3:[0,3,6,9,12,15,18,21],
+  h4:[0,4,8,12,16,20],
+};
 
-        // Lucide React icons as components (no changes, but rendering fixed via CSS)
-        const Clock = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-            </svg>
-        );
+/* Schedule builder — base hours are UTC+3; UTC+2 shifts -1 */
+const BASE_SCHED = [
+  {h:0,  h2:'22–00 closes → 00–02 opens', h3:'21–00 closes → 00–03 opens', h4:'20–00 closes → 00–04 opens', ev:'NY Close — Daily Server Reset',              ec:'violet'},
+  {h:2,  h2:'00–02 closes → 02–04 opens', h3:'',                            h4:'',                            ev:'',                                            ec:''},
+  {h:3,  h2:'',                            h3:'00–03 closes → 03–06 opens', h4:'',                            ev:'Sydney / Tokyo Open — Asia begins',           ec:'amber'},
+  {h:4,  h2:'02–04 closes → 04–06 opens', h3:'',                            h4:'00–04 closes → 04–08 opens', ev:'',                                            ec:''},
+  {h:6,  h2:'04–06 closes → 06–08 opens', h3:'03–06 closes → 06–09 opens', h4:'',                            ev:'',                                            ec:''},
+  {h:8,  h2:'06–08 closes → 08–10 opens', h3:'',                            h4:'04–08 closes → 08–12 opens', ev:'',                                            ec:''},
+  {h:9,  h2:'',                            h3:'06–09 closes → 09–12 opens', h4:'',                            ev:'Tokyo → London Handover',                    ec:'sky'},
+  {h:10, h2:'08–10 closes → 10–12 opens', h3:'',                            h4:'',                            ev:'',                                            ec:''},
+  {h:11, h2:'',                            h3:'',                            h4:'',                            ev:'⚡ LONDON OPEN — Prime Setup Zone',           ec:'rose'},
+  {h:12, h2:'10–12 closes → 12–14 opens', h3:'09–12 closes → 12–15 opens', h4:'08–12 closes → 12–16 opens', ev:'',                                            ec:''},
+  {h:14, h2:'12–14 closes → 14–16 opens', h3:'',                            h4:'',                            ev:'',                                            ec:''},
+  {h:15, h2:'',                            h3:'12–15 closes → 15–18 opens', h4:'',                            ev:'London Midday — Pullback / Retest Zone',     ec:'sky'},
+  {h:16, h2:'14–16 closes → 16–18 opens', h3:'',                            h4:'12–16 closes → 16–20 opens', ev:'🇺🇸 NY Open — Overlap with London begins',     ec:'rose'},
+  {h:18, h2:'16–18 closes → 18–20 opens', h3:'15–18 closes → 18–21 opens', h4:'',                            ev:'',                                            ec:''},
+  {h:19, h2:'',                            h3:'',                            h4:'',                            ev:'🔄 LONDON CLOSE — Watch for Reversals',      ec:'orange'},
+  {h:20, h2:'18–20 closes → 20–22 opens', h3:'',                            h4:'16–20 closes → 20–00 opens', ev:'',                                            ec:''},
+  {h:21, h2:'',                            h3:'18–21 closes → 21–00 opens', h4:'',                            ev:'⚡ NY PEAK — Maximum Volatility Window',      ec:'rose'},
+  {h:22, h2:'20–22 closes → 22–00 opens', h3:'',                            h4:'',                            ev:'',                                            ec:''},
+];
 
-        const TrendingUp = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                <polyline points="17 6 23 6 23 12"></polyline>
-            </svg>
-        );
+const shiftCandle = (s, d) => s.replace(/(\d+)–(\d+)/g, (_,a,b) => {
+  const sa = (parseInt(a)+d+24)%24, sb = (parseInt(b)+d+24)%24;
+  return `${String(sa).padStart(2,'0')}–${String(sb).padStart(2,'0')}`;
+});
 
-        const AlertCircle = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-        );
+const buildSched = (tz) => {
+  const d = tz === 'UTC+2' ? -1 : 0;
+  return BASE_SCHED.map(r => ({
+    ...r,
+    displayH: (r.h + d + 24) % 24,
+    time: `${String((r.h+d+24)%24).padStart(2,'0')}:00`,
+    h2: shiftCandle(r.h2, d),
+    h3: shiftCandle(r.h3, d),
+    h4: shiftCandle(r.h4, d),
+  }));
+};
 
-        const Globe = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-            </svg>
-        );
+/* Sessions */
+const buildSessions = (tz) => {
+  const d = tz === 'UTC+2' ? -1 : 0;
+  const t = h => `${String((h+d+24)%24).padStart(2,'0')}:00`;
+  return [
+    { name:'Asian Session',          dot:'#ffb800', col:'amber',
+      time:`${t(0)} – ${t(9)}`,
+      pairs:['USD/JPY','EUR/JPY','GBP/JPY','AUD/USD','NZD/USD','AUD/JPY','USD/CHF'],
+      note:'Low volatility, range-bound. Best for range / mean-reversion strategies. Avoid EUR/USD & GBP/USD — thin markets, wide spreads, choppy price action.' },
+    { name:'Tokyo → London Handover', dot:'#38d0ff', col:'sky',
+      time:`${t(9)} – ${t(11)}`,
+      pairs:['EUR/JPY','GBP/JPY','EUR/USD','USD/JPY'],
+      note:'Transitional zone. JPY pairs wind down; EUR pairs wake up. Watch for breakouts from the Asian range — often the first decisive move of the London day.' },
+    { name:'London Session',          dot:'#ff5c7a', col:'rose',
+      time:`${t(11)} – ${t(19)}`,
+      pairs:['EUR/USD','GBP/USD','EUR/GBP','GBP/JPY','USD/CHF','EUR/JPY','EUR/CHF'],
+      note:'Highest volume. Strong directional trends. London Open often prints the day\'s high or low. First 15 min: false spikes common — wait for candle close confirmation.' },
+    { name:'NY–London Overlap',       dot:'#ff7c3a', col:'orange',
+      time:`${t(16)} – ${t(19)}`,
+      pairs:['EUR/USD','GBP/USD','USD/JPY','USD/CAD','USD/CHF','GBP/JPY','XAU/USD'],
+      note:'Peak volatility. All majors and gold move hardest here. Best R:R setups form at London Close. High-impact news events reach maximum market impact in this window.' },
+    { name:'New York Session',        dot:'#9b6dff', col:'violet',
+      time:`${t(16)} – ${t(0)}`,
+      pairs:['USD/CAD','USD/JPY','GBP/USD','EUR/USD','USD/CHF','XAU/USD'],
+      note:'NY drives continuation or reversal of London moves. USD/CAD very active (oil correlation). After London close, volatility drops sharply — be selective with entries.' },
+    { name:'Dead Zone',               dot:'#3d5068', col:'dim',
+      time:`${t(0)} – ${t(3)}`,
+      pairs:['— Avoid Trading —'],
+      note:'Post NY Close. Lowest volume of the 24h cycle. Spreads widen, fakeouts common, no institutional flow. Use for analysis, journaling and session planning.' },
+  ];
+};
 
-        const TradingTimeframes = () => {
-            const [selectedTimeframe, setSelectedTimeframe] = useState('all');
-            const [timezone, setTimezone] = useState('UTC+2');
-            const [currentTime, setCurrentTime] = useState(new Date());
+const COL = {rose:'#ff7090',orange:'#ff9060',amber:'#ffc840',sky:'#60d8ff',violet:'#b890ff',green:'#40f090','':'var(--soft)'};
 
-            // Update clock every second
-            useEffect(() => {
-                const timer = setInterval(() => {
-                    setCurrentTime(new Date());
-                }, 1000);
+/* Icons */
+const IC = {
+  Clock:()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  Zap:  ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  Globe:()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+  Up:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  Map:  ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>,
+  Info: ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+};
 
-                return () => clearInterval(timer);
-            }, []);
+const App = () => {
+  const [tz, setTz] = useState('UTC+3');
+  const [tf, setTf] = useState('all');
+  const [now, setNow] = useState(new Date());
 
-            // Get time in selected timezone (for display)
-            const getTimeInTimezone = () => {
-                const utcOffset = timezone === 'UTC+2' ? 2 : 3;
-                const localTime = new Date(currentTime.getTime() + (utcOffset * 60 * 60 * 1000) + (currentTime.getTimezoneOffset() * 60 * 1000));
-                
-                const hours = String(localTime.getHours()).padStart(2, '0');
-                const minutes = String(localTime.getMinutes()).padStart(2, '0');
-                const seconds = String(localTime.getSeconds()).padStart(2, '0');
-                
-                return `${hours}:${minutes}:${seconds}`;
-            };
+  useEffect(() => { const id = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(id); }, []);
 
-            // Compute local time object for calculations (hour/min/sec in timezone)
-            const localTime = useMemo(() => {
-                const utcOffset = timezone === 'UTC+2' ? 2 : 3;
-                return new Date(currentTime.getTime() + (utcOffset * 60 * 60 * 1000) + (currentTime.getTimezoneOffset() * 60 * 1000));
-            }, [currentTime, timezone]);
+  const local = useMemo(() => {
+    const off = tz === 'UTC+3' ? 3 : 2;
+    return new Date(now.getTime() + off*3600000 + now.getTimezoneOffset()*60000);
+  }, [now, tz]);
 
-            const currentHour = localTime.getHours();
-            const currentMinute = localTime.getMinutes();
-            const currentSecond = localTime.getSeconds();
+  const H = local.getHours(), M = local.getMinutes(), S = local.getSeconds();
+  const clockStr = `${String(H).padStart(2,'0')}:${String(M).padStart(2,'0')}:${String(S).padStart(2,'0')}`;
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dateStr = `${DAYS[local.getDay()]}  ${local.getDate()} ${MONS[local.getMonth()]} ${local.getFullYear()}`;
 
-            const scheduleUTC2 = [
-                { time: '00:00', h2: '22–00 closes → 00–02 opens', h3: '21–00 closes → 00–03 opens', h4: '20–00 closes → 00–04 opens', event: '', color: '', importance: 'low' },
-                { time: '02:00', h2: '00–02 closes → 02–04 opens', h3: '', h4: '', event: 'Sydney/Tokyo open (Asia session starts)', color: 'bg-amber-500/20 border-amber-500/50', importance: 'medium' },
-                { time: '03:00', h2: '', h3: '00–03 closes → 03–06 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '04:00', h2: '02–04 closes → 04–06 opens', h3: '', h4: '00–04 closes → 04–08 opens', event: '', color: '', importance: 'low' },
-                { time: '06:00', h2: '04–06 closes → 06–08 opens', h3: '03–06 closes → 06–09 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '08:00', h2: '06–08 closes → 08–10 opens', h3: '', h4: '04–08 closes → 08–12 opens', event: 'Tokyo → London handover', color: 'bg-sky-500/20 border-sky-500/50', importance: 'medium' },
-                { time: '09:00', h2: '', h3: '06–09 closes → 09–12 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '10:00', h2: '08–10 closes → 10–12 opens', h3: '', h4: '', event: 'LONDON OPEN – biggest move', color: 'bg-rose-500/20 border-rose-500/50', importance: 'high' },
-                { time: '12:00', h2: '10–12 closes → 12–14 opens', h3: '09–12 closes → 12–15 opens', h4: '08–12 closes → 12–16 opens', event: '', color: '', importance: 'low' },
-                { time: '14:00', h2: '12–14 closes → 14–16 opens', h3: '', h4: '', event: 'London midday', color: 'bg-sky-500/20 border-sky-500/50', importance: 'medium' },
-                { time: '15:00', h2: '', h3: '12–15 closes → 15–18 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '16:00', h2: '14–16 closes → 16–18 opens', h3: '', h4: '12–16 closes → 16–20 opens', event: '', color: '', importance: 'low' },
-                { time: '18:00', h2: '16–18 closes → 18–20 opens', h3: '15–18 closes → 18–21 opens', h4: '', event: 'LONDON CLOSE – reversals', color: 'bg-orange-500/20 border-orange-500/50', importance: 'high' },
-                { time: '20:00', h2: '18–20 closes → 20–22 opens', h3: '', h4: '16–20 closes → 20–00 opens', event: 'NY + London overlap peak (Peak volatility)', color: 'bg-rose-500/20 border-rose-500/50', importance: 'high' },
-                { time: '21:00', h2: '', h3: '18–21 closes → 21–00 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '22:00', h2: '20–22 closes → 22–00 opens', h3: '', h4: '', event: '', color: '', importance: 'low' },
-                { time: '23:00', h2: '', h3: '', h4: '', event: 'NY 21:00 CLOSE (daily reset)', color: 'bg-violet-500/20 border-violet-500/50', importance: 'high' },
-                { time: '02:00', h2: '22–02 closes → new day', h3: '', h4: '', event: 'New trading day', color: 'bg-emerald-500/20 border-emerald-500/50', importance: 'high' }
-            ];
+  const nextOpen = (key) => {
+    const hrs = OPENS[key], after = hrs.filter(h => h > H);
+    const raw = after.length ? after[0] : hrs[0]+24;
+    const nH = raw%24;
+    const tot = (raw-H)*3600 - M*60 - S;
+    const hh = Math.floor(tot/3600), mm = Math.floor((tot%3600)/60), ss = tot%60;
+    const label = `${String(nH).padStart(2,'0')}:00`;
+    const cd = hh>0 ? `${hh}h ${String(mm).padStart(2,'0')}m ${String(ss).padStart(2,'0')}s` : `${String(mm).padStart(2,'0')}m ${String(ss).padStart(2,'0')}s`;
+    return { label, cd, nH };
+  };
 
-            const scheduleUTC3 = [
-                { time: '00:00', h2: '', h3: '', h4: '', event: 'NY 21:00 CLOSE (daily reset)', color: 'bg-violet-500/20 border-violet-500/50', importance: 'high' },
-                { time: '01:00', h2: '23–01 closes → 01–03 opens', h3: '22–01 closes → 01–04 opens', h4: '21–01 closes → 01–05 opens', event: '', color: '', importance: 'low' },
-                { time: '03:00', h2: '01–03 closes → 03–05 opens', h3: '', h4: '', event: 'Sydney/Tokyo open (Asia session starts)', color: 'bg-amber-500/20 border-amber-500/50', importance: 'medium' },
-                { time: '04:00', h2: '', h3: '01–04 closes → 04–07 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '05:00', h2: '03–05 closes → 05–07 opens', h3: '', h4: '01–05 closes → 05–09 opens', event: '', color: '', importance: 'low' },
-                { time: '07:00', h2: '05–07 closes → 07–09 opens', h3: '04–07 closes → 07–10 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '09:00', h2: '07–09 closes → 09–11 opens', h3: '', h4: '05–09 closes → 09–13 opens', event: 'Tokyo → London handover', color: 'bg-sky-500/20 border-sky-500/50', importance: 'medium' },
-                { time: '10:00', h2: '', h3: '07–10 closes → 10–13 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '11:00', h2: '09–11 closes → 11–13 opens', h3: '', h4: '', event: 'LONDON OPEN – biggest move', color: 'bg-rose-500/20 border-rose-500/50', importance: 'high' },
-                { time: '13:00', h2: '11–13 closes → 13–15 opens', h3: '10–13 closes → 13–16 opens', h4: '09–13 closes → 13–17 opens', event: '', color: '', importance: 'low' },
-                { time: '15:00', h2: '13–15 closes → 15–17 opens', h3: '', h4: '', event: 'London midday', color: 'bg-sky-500/20 border-sky-500/50', importance: 'medium' },
-                { time: '16:00', h2: '', h3: '13–16 closes → 16–19 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '17:00', h2: '15–17 closes → 17–19 opens', h3: '', h4: '13–17 closes → 17–21 opens', event: '', color: '', importance: 'low' },
-                { time: '19:00', h2: '17–19 closes → 19–21 opens', h3: '16–19 closes → 19–22 opens', h4: '', event: 'LONDON CLOSE – reversals', color: 'bg-orange-500/20 border-orange-500/50', importance: 'high' },
-                { time: '21:00', h2: '19–21 closes → 21–23 opens', h3: '', h4: '17–21 closes → 21–01 opens', event: 'NY + London overlap peak (Peak volatility)', color: 'bg-rose-500/20 border-rose-500/50', importance: 'high' },
-                { time: '22:00', h2: '', h3: '19–22 closes → 22–01 opens', h4: '', event: '', color: '', importance: 'low' },
-                { time: '23:00', h2: '21–23 closes → 23–01 opens', h3: '', h4: '', event: '', color: '', importance: 'low' },
-                { time: '03:00', h2: '23–03 closes → new day', h3: '', h4: '', event: 'New trading day', color: 'bg-emerald-500/20 border-emerald-500/50', importance: 'high' }
-            ];
+  const n2 = useMemo(()=>nextOpen('h2'),[H,M,S]);
+  const n3 = useMemo(()=>nextOpen('h3'),[H,M,S]);
+  const n4 = useMemo(()=>nextOpen('h4'),[H,M,S]);
 
-            const currentSchedule = useMemo(() => {
-                return timezone === 'UTC+2' ? scheduleUTC2 : scheduleUTC3;
-            }, [timezone]);
+  const nextRowH = useMemo(()=>{
+    const cands = [...new Set([n2.nH,n3.nH,n4.nH])].sort((a,b)=>a-b);
+    const after = cands.filter(h=>h>H);
+    return after.length ? after[0] : cands[0];
+  },[n2.nH,n3.nH,n4.nH,H]);
 
-            // Updated open hours to match MT5 standard starting at 00:00 (UTC+2) / 01:00 (UTC+3)
-            const openHours = useMemo(() => {
-                if (timezone === 'UTC+2') {
-                    return {
-                        h2: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22],
-                        h3: [0, 3, 6, 9, 12, 15, 18, 21],
-                        h4: [0, 4, 8, 12, 16, 20]
-                    };
-                } else {
-                    return {
-                        h2: [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23],
-                        h3: [1, 4, 7, 10, 13, 16, 19, 22],
-                        h4: [1, 5, 9, 13, 17, 21]
-                    };
-                }
-            }, [timezone]);
+  const sched    = useMemo(()=>buildSched(tz),[tz]);
+  const sessions = useMemo(()=>buildSessions(tz),[tz]);
+  const curRow   = useMemo(()=>sched.find(r=>r.displayH===H)||null,[sched,H]);
+  const nxtRow   = useMemo(()=>sched.find(r=>r.displayH===nextRowH)||null,[sched,nextRowH]);
 
-            // Enhanced: Function to compute next open details (time & formatted countdown: "Xh YYm ZZs")
-            const getNextOpen = (tf) => {
-                const hours = [...openHours[tf]].sort((a, b) => a - b);  // Sorted copy
-                let nextH;
-                const afterCurrent = hours.filter(h => h > currentHour);
-                if (afterCurrent.length > 0) {
-                    nextH = afterCurrent[0];
-                } else {
-                    nextH = hours[0] + 24;  // Wrap to next day
-                }
-                const nextOpenHour = nextH % 24;
-                const totalMinutesToNext = (nextH - currentHour) * 60 - currentMinute;
-                const totalSecondsToNext = totalMinutesToNext * 60 - currentSecond;
-                
-                const hoursToNext = Math.floor(totalSecondsToNext / 3600);
-                const minutesToNext = Math.floor((totalSecondsToNext % 3600) / 60);
-                const secondsToNext = totalSecondsToNext % 60;
-                
-                const nextTimeStr = `${String(nextOpenHour).padStart(2, '0')}:00`;
-                
-                // Format: "1h 05m 42s" (omit 0h if <1h; always include m and s)
-                let countdownStr = '';
-                if (hoursToNext > 0) {
-                    countdownStr += `${hoursToNext}h `;
-                }
-                countdownStr += `${String(minutesToNext).padStart(2, '0')}m ${String(secondsToNext).padStart(2, '0')}s`;
-                
-                return { nextTime: nextTimeStr, countdown: countdownStr, nextHour: nextOpenHour };
-            };
+  const vis = (c) => tf==='all'||tf===c;
 
-            // Compute next opens (reactive to time/tz changes) - now includes nextHour for row matching
-            const next2H = useMemo(() => getNextOpen('h2'), [currentHour, currentMinute, currentSecond, openHours]);
-            const next3H = useMemo(() => getNextOpen('h3'), [currentHour, currentMinute, currentSecond, openHours]);
-            const next4H = useMemo(() => getNextOpen('h4'), [currentHour, currentMinute, currentSecond, openHours]);
+  const KT = tz==='UTC+3'
+    ? {lo:'11:00',lc:'19:00',ny:'21:00',as:'03:00',nc:'00:00',tl:'09:00',nov:'16:00'}
+    : {lo:'10:00',lc:'18:00',ny:'20:00',as:'02:00',nc:'23:00',tl:'08:00',nov:'15:00'};
 
-            // NEW: Find the next open hour across all timeframes for unified "next row" highlight
-            const overallNextHour = useMemo(() => {
-                const candidates = [next2H.nextHour, next3H.nextHour, next4H.nextHour];
-                const uniqueSorted = [...new Set(candidates)].sort((a, b) => a - b);
-                const afterCurrent = uniqueSorted.filter(h => h > currentHour);
-                return afterCurrent.length > 0 ? afterCurrent[0] : uniqueSorted[0];
-            }, [next2H.nextHour, next3H.nextHour, next4H.nextHour, currentHour]);
+  const tzLabel = tz==='UTC+3' ? 'EAT — Nairobi · Moscow · Riyadh' : 'EET — Cairo · Athens · Harare';
 
-            const getImportanceIcon = (importance) => {
-                if (importance === 'high') return <AlertCircle />;
-                if (importance === 'medium') return <TrendingUp />;
-                return null;
-            };
+  return (
+    <div className="app">
+      <div className="wrap">
 
-            const getTimezoneName = () => {
-                if (timezone === 'UTC+2') return 'EET - Eastern European Time (e.g., Cairo, Athens)';
-                if (timezone === 'UTC+3') return 'EAT - East Africa Time (e.g., Nairobi, Moscow)';
-                return '';
-            };
+        {/* Marquee */}
+        <div className="mq-bar">
+          <div className="mq-wrap">
+            <span className="mq-inner" style={{color:'rgba(0,207,255,0.55)',fontSize:'10px',fontFamily:'var(--mono)',letterSpacing:'0.06em',padding:'0 40px'}}>
+              📊 FX LIVE TERMINAL · 2H / 3H / 4H CANDLES FROM 00:00 · LONDON OPEN · NY SESSION · TOKYO SESSION · PAIRS BY SESSION · PEAK VOLATILITY · LIVE COUNTDOWNS · NOW &amp; NEXT ALWAYS ON TOP · UTC+2 / UTC+3 📈
+            </span>
+          </div>
+        </div>
 
-            const getKeyTimes = () => {
-                if (timezone === 'UTC+2') {
-                    return {
-                        londonOpen: '10:00',
-                        londonClose: '18:00',
-                        nyPeak: '20:00',
-                        asiaOpen: '02:00'
-                    };
-                } else {
-                    return {
-                        londonOpen: '11:00',
-                        londonClose: '19:00',
-                        nyPeak: '21:00',
-                        asiaOpen: '03:00'
-                    };
-                }
-            };
+        {/* Header */}
+        <div className="card hdr">
+          <div className="brand">
+            <div className="b-icon"><IC.Clock/></div>
+            <div>
+              <div className="b-title">FX Trading Timeframes</div>
+              <div className="b-sub">Live Market Terminal</div>
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            <span style={{color:'var(--cyan)'}}><IC.Globe/></span>
+            <select value={tz} onChange={e=>setTz(e.target.value)}>
+              <option value="UTC+3">UTC+3 — EAT (Nairobi / Moscow)</option>
+              <option value="UTC+2">UTC+2 — EET (Cairo / Athens)</option>
+            </select>
+          </div>
+        </div>
 
-            const keyTimes = getKeyTimes();
+        {/* Clock */}
+        <div className="clk-wrap">
+          <div className="corner c-tl"/><div className="corner c-tr"/>
+          <div className="corner c-bl"/><div className="corner c-br"/>
+          <div style={{fontSize:'9px',letterSpacing:'0.17em',textTransform:'uppercase',color:'var(--muted)',fontFamily:'var(--mono)',marginBottom:'8px'}}>
+            {tz} · {tzLabel}
+          </div>
+          <div className="clk-digits">{clockStr}</div>
+          <div className="clk-sub">{dateStr}</div>
+        </div>
 
-            // Check if row matches current hour for highlighting/arrow
-            const isCurrentRow = (rowTime) => {
-                const rowHour = parseInt(rowTime.split(':')[0]);
-                return rowHour === currentHour;
-            };
+        {/* Countdown */}
+        <div>
+          <div className="sec"><IC.Clock/> Next Candle Opens</div>
+          <div className="cd-grid">
+            {[
+              ['cd-g','cd-c','cd-v'],
+              [<IC.Clock/>,<IC.Up/>,<IC.Info/>],
+              ['Next 2H Open','Next 3H Open','Next 4H Open'],
+              [n2,n3,n4],
+            ][0].map((_,i) => (
+              <div key={i} className={`cd ${ ['cd-g','cd-c','cd-v'][i] }`}>
+                <div className="cd-lbl">{ [<IC.Clock/>,<IC.Up/>,<IC.Info/>][i] } { ['Next 2H Open','Next 3H Open','Next 4H Open'][i] }</div>
+                <div className="cd-t">{ [n2,n3,n4][i].label }</div>
+                <div className="cd-cd">{ [n2,n3,n4][i].cd }</div>
+              </div>
+            ))}
+          </div>
+        </div>
 
-            // NEW: Check if row matches next open hour for forward highlight
-            const isNextRow = (rowTime) => {
-                const rowHour = parseInt(rowTime.split(':')[0]);
-                return rowHour === overallNextHour;
-            };
+        {/* Live Status */}
+        <div>
+          <div className="sec"><IC.Zap/> Live Status — Current &amp; Next Window</div>
+          <div className="ls-grid">
 
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 p-2 sm:p-4 md:p-8">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="bg-white/5 backdrop-blur-xl rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border border-white/10">
-                            {/* Moving Title Banner - Enhanced with more text, smooth transition */}
-                            <div className="bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-600 rounded-xl mb-6 py-4 overflow-hidden shadow-lg">
-                                <div className="moving-title">
-                                    <span className="text-white font-bold text-lg md:text-xl px-6 tracking-wide">
-                                        📊 Live Trading Timeframes & Market Sessions • Real-Time Clock • 2H/3H/4H Candle Analysis • Forex Market Timing • London Open • NY Session • Tokyo Session • Peak Volatility Tracker • Next Open Countdowns • Moscow/Cyprus Sync • DST-Aware Shifts • Global Forex Pulse 📈
-                                    </span>
-                                </div>
-                            </div>
+            <div className="ls-now">
+              <div style={{display:'flex',alignItems:'center',gap:'7px',marginBottom:'9px'}}>
+                <span className="ls-badge lsb-now"><span className="ping-dot pa"></span> NOW</span>
+                <span style={{fontSize:'9px',color:'rgba(255,184,0,0.45)',fontFamily:'var(--mono)',letterSpacing:'0.1em'}}>ACTIVE HOUR</span>
+              </div>
+              <div className="ls-time">{String(H).padStart(2,'0')}:00 – {String((H+1)%24).padStart(2,'0')}:00</div>
+              {curRow ? (
+                <>
+                  <div className="ls-tags">
+                    {curRow.h2 && <span className="tg tg-2">2H: {curRow.h2}</span>}
+                    {curRow.h3 && <span className="tg tg-3">3H: {curRow.h3}</span>}
+                    {curRow.h4 && <span className="tg tg-4">4H: {curRow.h4}</span>}
+                  </div>
+                  <div className="ls-ev">{curRow.ev || 'No major event — monitor for continuation'}</div>
+                </>
+              ) : <div style={{fontSize:'11px',color:'var(--muted)'}}>Monitoring…</div>}
+            </div>
 
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 md:w-10 md:h-10 text-emerald-400 flex-shrink-0 shadow-md rounded-full bg-white/10 p-2">
-                                        <Clock />
-                                    </div>
-                                    <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-white tracking-tight">Trading Timeframes</h1>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-5 h-5 md:w-6 md:h-6 text-sky-400 flex-shrink-0">
-                                        <Globe />
-                                    </div>
-                                    <select
-                                        value={timezone}
-                                        onChange={(e) => setTimezone(e.target.value)}
-                                        className="bg-slate-800/50 text-white px-4 py-3 rounded-xl border border-slate-600/50 focus:outline-none focus:ring-2 focus:ring-sky-500/50 font-semibold cursor-pointer text-sm md:text-base w-full md:w-auto shadow-md backdrop-blur-sm"
-                                    >
-                                        <option value="UTC+2">UTC+2 (EET)</option>
-                                        <option value="UTC+3">UTC+3 (EAT)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Real-Time Clock Display - Refined gradient and shadow */}
-                            <div className="bg-gradient-to-r from-emerald-600 via-sky-600 to-violet-600 rounded-2xl p-6 md:p-8 mb-6 text-center shadow-xl border border-white/20">
-                                <p className="text-white/90 text-sm md:text-base font-semibold mb-3">Current Time ({timezone})</p>
-                                <div className="text-4xl sm:text-5xl md:text-7xl font-bold text-white font-mono tracking-widest gentle-pulse">
-                                    {getTimeInTimezone()}
-                                </div>
-                                <p className="text-white/80 text-sm mt-3 px-4">{getTimezoneName()}</p>
-                            </div>
-                            
-                            {/* Removed explanatory text as requested */}
-
-                            {/* Enhanced Countdown Timers Section - Vibrant, layered cards with top-notch colors, responsive grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
-                                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 border border-emerald-400/30 rounded-2xl p-4 sm:p-6 text-center gentle-pulse shadow-xl backdrop-blur-sm">
-                                    <h4 className="text-emerald-300 font-bold mb-3 flex items-center justify-center gap-3 text-sm md:text-base">
-                                        <div className="w-5 h-5 text-emerald-400"><Clock /></div>
-                                        Next 2H Open
-                                    </h4>
-                                    <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4 tracking-wide">{next2H.nextTime}</div>
-                                    <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-emerald-100 font-mono bg-emerald-900/30 rounded-lg px-3 sm:px-4 py-2 sm:py-3 shadow-inner border border-emerald-500/20">
-                                        {next2H.countdown}
-                                    </div>
-                                </div>
-                                <div className="bg-gradient-to-br from-sky-500/10 to-sky-600/10 border border-sky-400/30 rounded-2xl p-4 sm:p-6 text-center gentle-pulse shadow-xl backdrop-blur-sm">
-                                    <h4 className="text-sky-300 font-bold mb-3 flex items-center justify-center gap-3 text-sm md:text-base">
-                                        <div className="w-5 h-5 text-sky-400"><TrendingUp /></div>
-                                        Next 3H Open
-                                    </h4>
-                                    <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4 tracking-wide">{next3H.nextTime}</div>
-                                    <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-sky-100 font-mono bg-sky-900/30 rounded-lg px-3 sm:px-4 py-2 sm:py-3 shadow-inner border border-sky-500/20">
-                                        {next3H.countdown}
-                                    </div>
-                                </div>
-                                <div className="bg-gradient-to-br from-violet-500/10 to-violet-600/10 border border-violet-400/30 rounded-2xl p-4 sm:p-6 text-center gentle-pulse shadow-xl backdrop-blur-sm">
-                                    <h4 className="text-violet-300 font-bold mb-3 flex items-center justify-center gap-3 text-sm md:text-base">
-                                        <div className="w-5 h-5 text-violet-400"><AlertCircle /></div>
-                                        Next 4H Open
-                                    </h4>
-                                    <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4 tracking-wide">{next4H.nextTime}</div>
-                                    <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-violet-100 font-mono bg-violet-900/30 rounded-lg px-3 sm:px-4 py-2 sm:py-3 shadow-inner border border-violet-500/20">
-                                        {next4H.countdown}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mb-6 flex flex-wrap gap-3 justify-center sm:justify-start">
-                                <button
-                                    onClick={() => setSelectedTimeframe('all')}
-                                    className={`px-4 py-3 rounded-xl font-semibold transition-all text-sm md:text-base shadow-md flex-1 sm:flex-none ${
-                                        selectedTimeframe === 'all' 
-                                            ? 'bg-sky-500 text-white shadow-sky-500/25 hover:shadow-sky-500/50' 
-                                            : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-600/50'
-                                    }`}
-                                >
-                                    All Timeframes
-                                </button>
-                                <button
-                                    onClick={() => setSelectedTimeframe('h2')}
-                                    className={`px-4 py-3 rounded-xl font-semibold transition-all text-sm md:text-base shadow-md flex-1 sm:flex-none ${
-                                        selectedTimeframe === 'h2' 
-                                            ? 'bg-emerald-500 text-white shadow-emerald-500/25 hover:shadow-emerald-500/50' 
-                                            : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-600/50'
-                                    }`}
-                                >
-                                    2H Only
-                                </button>
-                                <button
-                                    onClick={() => setSelectedTimeframe('h3')}
-                                    className={`px-4 py-3 rounded-xl font-semibold transition-all text-sm md:text-base shadow-md flex-1 sm:flex-none ${
-                                        selectedTimeframe === 'h3' 
-                                            ? 'bg-sky-500 text-white shadow-sky-500/25 hover:shadow-sky-500/50' 
-                                            : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-600/50'
-                                    }`}
-                                >
-                                    3H Only
-                                </button>
-                                <button
-                                    onClick={() => setSelectedTimeframe('h4')}
-                                    className={`px-4 py-3 rounded-xl font-semibold transition-all text-sm md:text-base shadow-md flex-1 sm:flex-none ${
-                                        selectedTimeframe === 'h4' 
-                                            ? 'bg-violet-500 text-white shadow-violet-500/25 hover:shadow-violet-500/50' 
-                                            : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-600/50'
-                                    }`}
-                                >
-                                    4H Only
-                                </button>
-                            </div>
-
-                            <div className="overflow-x-auto table-container -mx-2 sm:-mx-4 md:mx-0 rounded-xl border border-slate-700/50 shadow-lg">
-                                <div className="inline-block min-w-full align-middle">
-                                    <table className="w-full text-xs sm:text-sm md:text-base border-collapse divide-y divide-slate-700/50">
-                                        <thead className="bg-slate-800/30 backdrop-blur-sm">
-                                            <tr>
-                                                <th className="text-left py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-slate-200 font-bold tracking-wide">{timezone}</th>
-                                                <th className="text-left py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-slate-200 font-bold tracking-wide">2H</th>
-                                                <th className="text-left py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-slate-200 font-bold tracking-wide">3H</th>
-                                                <th className="text-left py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-slate-200 font-bold tracking-wide">4H</th>
-                                                <th className="text-left py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-slate-200 font-bold tracking-wide">Event</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-700/30">
-                                            {currentSchedule.map((row, idx) => {
-                                                const isCurrent = isCurrentRow(row.time);
-                                                const isNext = isNextRow(row.time);
-                                                return (
-                                                    <tr 
-                                                        key={idx}
-                                                        className={`transition-all duration-300 hover:bg-slate-700/20 relative ${isCurrent ? 'current-row-highlight bg-amber-400/10 border-amber-400/30 gentle-pulse shadow-md' : ''} ${isNext ? 'next-row-highlight bg-orange-400/10 border-orange-400/30 shadow-md' : ''} ${row.color ? ` ${row.color} border-2 shadow-lg` : 'border-transparent'}`}
-                                                    >
-                                                        <td className="py-3 px-2 sm:py-4 sm:px-4 md:px-6 font-bold text-sky-300 font-mono text-sm md:text-base whitespace-nowrap flex items-center gap-2 relative z-10 bg-inherit">
-                                                            {row.time}
-                                                            {isCurrent && (
-                                                                <span className="text-amber-400 font-bold text-xs sm:text-sm animate-bounce flex items-center gap-1">← NOW <div className="w-2 h-2 bg-amber-400 rounded-full animate-ping"></div></span>
-                                                            )}
-                                                            {isNext && (
-                                                                <span className="text-orange-400 font-bold text-xs sm:text-sm animate-pulse flex items-center gap-1">→ NEXT <div className="w-2 h-2 bg-orange-400 rounded-full animate-ping"></div></span>
-                                                            )}
-                                                        </td>
-                                                        <td className={`py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-white font-mono text-xs md:text-sm ${selectedTimeframe !== 'all' && selectedTimeframe !== 'h2' ? 'opacity-40' : ''}`}>
-                                                            {row.h2}
-                                                        </td>
-                                                        <td className={`py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-white font-mono text-xs md:text-sm ${selectedTimeframe !== 'all' && selectedTimeframe !== 'h3' ? 'opacity-40' : ''}`}>
-                                                            {row.h3}
-                                                        </td>
-                                                        <td className={`py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-white font-mono text-xs md:text-sm ${selectedTimeframe !== 'all' && selectedTimeframe !== 'h4' ? 'opacity-40' : ''}`}>
-                                                            {row.h4}
-                                                        </td>
-                                                        <td className="py-3 px-2 sm:py-4 sm:px-4 md:px-6 text-white relative z-10 bg-inherit">
-                                                            {row.event && (
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 rounded-full p-0.5 flex items-center justify-center ${ 
-                                                                        row.importance === 'high' ? 'bg-rose-500/20 text-rose-400' : 
-                                                                        row.importance === 'medium' ? 'bg-amber-500/20 text-amber-400' : 
-                                                                        'bg-slate-500/20 text-slate-400'
-                                                                    }`}>
-                                                                        {getImportanceIcon(row.importance)}
-                                                                    </div>
-                                                                    <span className={`text-xs md:text-sm ${
-                                                                        row.importance === 'high' ? 'font-bold text-rose-300' : 
-                                                                        row.importance === 'medium' ? 'font-semibold text-amber-300' : 
-                                                                        'text-slate-300'
-                                                                    }`}>
-                                                                        {row.event}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-slate-800/30 rounded-2xl p-4 sm:p-6 border border-slate-700/30 shadow-md backdrop-blur-sm">
-                                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-3">
-                                        <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 bg-rose-500/20 text-rose-400 rounded-full p-1 flex items-center justify-center">
-                                            <AlertCircle />
-                                        </div>
-                                        High Volatility
-                                    </h3>
-                                    <ul className="space-y-3 text-sm md:text-base text-slate-300">
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-rose-400 font-bold mt-1">•</span>
-                                            <span><strong className="text-rose-300">{keyTimes.londonOpen}</strong> - London Open</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-rose-400 font-bold mt-1">•</span>
-                                            <span><strong className="text-orange-300">{keyTimes.londonClose}</strong> - London Close</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-rose-400 font-bold mt-1">•</span>
-                                            <span><strong className="text-rose-300">{keyTimes.nyPeak}</strong> - NY/London overlap</span>
-                                        </li>
-                                    </ul>
-                                </div>
-
-                                <div className="bg-slate-800/30 rounded-2xl p-4 sm:p-6 border border-slate-700/30 shadow-md backdrop-blur-sm">
-                                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-3">
-                                        <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 bg-amber-500/20 text-amber-400 rounded-full p-1 flex items-center justify-center">
-                                            <TrendingUp />
-                                        </div>
-                                        Session Transitions
-                                    </h3>
-                                    <ul className="space-y-3 text-sm md:text-base text-slate-300">
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-amber-400 font-bold mt-1">•</span>
-                                            <span><strong className="text-amber-300">{keyTimes.asiaOpen}</strong> - Asia begins</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-amber-400 font-bold mt-1">•</span>
-                                            <span><strong className="text-sky-300">{timezone === 'UTC+2' ? '08:00' : '09:00'}</strong> - Tokyo to London</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-amber-400 font-bold mt-1">•</span>
-                                            <span><strong className="text-violet-300">00:00</strong> - Daily reset</span>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 bg-slate-800/30 rounded-2xl p-4 sm:p-6 border border-slate-700/30 shadow-md backdrop-blur-sm">
-                                <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-4">Trading Tips</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 text-sm md:text-base text-slate-300">
-                                    <div className="text-center">
-                                        <p className="font-bold text-emerald-300 mb-2">2H Candles</p>
-                                        <p className="text-emerald-200">Scalping & quick trades</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="font-bold text-sky-300 mb-2">3H Candles</p>
-                                        <p className="text-sky-200">Intraday swing trades</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="font-bold text-violet-300 mb-2">4H Candles</p>
-                                        <p className="text-violet-200">Trend confirmation</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 text-slate-400 text-sm text-center px-4 py-4 bg-slate-800/20 rounded-xl border border-slate-700/30">
-                                <p>💡 Switch timezones above • Color-coded major events • <span className="text-amber-300 font-semibold">Live countdowns to next opens (h/m/s)</span> • <span className="text-orange-300 font-semibold">Orange bar guides to next</span> • Responsive across devices</p>
-                            </div>
-                        </div>
-                    </div>
+            <div className="ls-nxt">
+              <div style={{display:'flex',alignItems:'center',gap:'7px',marginBottom:'9px'}}>
+                <span className="ls-badge lsb-nxt"><span className="ping-dot po"></span> NEXT</span>
+                <span style={{fontSize:'9px',color:'rgba(255,124,58,0.45)',fontFamily:'var(--mono)',letterSpacing:'0.1em'}}>UPCOMING</span>
+              </div>
+              <div className="ls-time">{String(nextRowH).padStart(2,'0')}:00</div>
+              {nxtRow ? (
+                <>
+                  <div className="ls-tags">
+                    {nxtRow.h2 && <span className="tg tg-2">2H: {nxtRow.h2}</span>}
+                    {nxtRow.h3 && <span className="tg tg-3">3H: {nxtRow.h3}</span>}
+                    {nxtRow.h4 && <span className="tg tg-4">4H: {nxtRow.h4}</span>}
+                    {n2.nH===nextRowH && <span className="tg tg-2">2H opens</span>}
+                    {n3.nH===nextRowH && <span className="tg tg-3">3H opens</span>}
+                    {n4.nH===nextRowH && <span className="tg tg-4">4H opens</span>}
+                  </div>
+                  <div className="ls-ev">{nxtRow.ev || 'Candle transition — watch for momentum shift'}</div>
+                </>
+              ) : (
+                <div className="ls-tags">
+                  {n2.nH===nextRowH && <span className="tg tg-2">2H opens</span>}
+                  {n3.nH===nextRowH && <span className="tg tg-3">3H opens</span>}
+                  {n4.nH===nextRowH && <span className="tg tg-4">4H opens</span>}
                 </div>
-            );
-        };
+              )}
+            </div>
 
-        ReactDOM.render(<TradingTimeframes />, document.getElementById('root'));
-    </script>
+          </div>
+        </div>
+
+        {/* Filter */}
+        <div className="btn-row">
+          {[['all','All Timeframes','bon-all'],['h2','2H Candles','bon-h2'],['h3','3H Candles','bon-h3'],['h4','4H Candles','bon-h4']].map(([k,l,a])=>(
+            <button key={k} className={`btn ${tf===k?a:''}`} onClick={()=>setTf(k)}>{l}</button>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div>
+          <div className="sec"><IC.Map/> Full Schedule — Scrollable Reference</div>
+          <div className="tbl-outer">
+            <div className="tbl-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{color:'var(--soft)'}}>Time ({tz})</th>
+                    <th style={{color:vis('h2')?'var(--green)':'var(--dim)'}}>2H Candle</th>
+                    <th style={{color:vis('h3')?'var(--cyan)':'var(--dim)'}}>3H Candle</th>
+                    <th style={{color:vis('h4')?'var(--violet)':'var(--dim)'}}>4H Candle</th>
+                    <th style={{color:'var(--soft)'}}>Market Event</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sched.map((row, idx) => {
+                    const isCur = row.displayH === H;
+                    const isNxt = row.displayH === nextRowH && !isCur;
+                    const rc = isCur ? 'row-now' : isNxt ? 'row-nxt' : row.ec ? `ev-${row.ec}` : (idx%2===0?'row-alt':'');
+                    return (
+                      <tr key={idx} className={rc}>
+                        <td style={{whiteSpace:'nowrap'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                            <span className="tc-t">{row.time}</span>
+                            {isCur && <><span className="ping-dot pa" style={{width:'5px',height:'5px'}}></span><span style={{fontSize:'8px',fontWeight:'800',color:'var(--amber)',letterSpacing:'0.12em'}}>NOW</span></>}
+                            {isNxt && <><span className="ping-dot po" style={{width:'5px',height:'5px'}}></span><span style={{fontSize:'8px',fontWeight:'800',color:'var(--orange)',letterSpacing:'0.12em'}}>NEXT</span></>}
+                          </div>
+                        </td>
+                        <td className={vis('h2')?'tc-2':'tc-x'}>{row.h2}</td>
+                        <td className={vis('h3')?'tc-3':'tc-x'}>{row.h3}</td>
+                        <td className={vis('h4')?'tc-4':'tc-x'}>{row.h4}</td>
+                        <td>{row.ev && <span style={{fontFamily:'var(--sans)',fontSize:'12px',fontWeight:'600',color:COL[row.ec]}}>{row.ev}</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Sessions */}
+        <div>
+          <div className="sec"><IC.Map/> Trading Sessions — Pairs &amp; What to Expect</div>
+          <div className="sess-grid">
+            {sessions.map((s,i)=>{
+              const c = {amber:'#ffb800',sky:'#38d0ff',rose:'#ff5c7a',orange:'#ff7c3a',violet:'#9b6dff',dim:'#3d5068'}[s.col]||'#6b8099';
+              return (
+                <div key={i} className="sess-card">
+                  <div className="sess-hd" style={{color:c}}>
+                    <span className="dot-s" style={{background:s.dot,boxShadow:`0 0 6px ${s.dot}`}}></span>
+                    {s.name}
+                  </div>
+                  <div className="sess-t" style={{color:c}}>{s.time}</div>
+                  <div className="pairs">{s.pairs.map(p=><span key={p} className="pair">{p}</span>)}</div>
+                  <div className="sess-note">{s.note}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Info */}
+        <div className="info-grid">
+          <div className="info-card" style={{borderColor:'rgba(255,92,122,0.14)'}}>
+            <div className="info-hd" style={{color:'#ff8aa0'}}><IC.Zap/> Peak Volatility</div>
+            {[[KT.lo,'London Open','#ff5c7a'],[KT.nov,'NY Open / Overlap','#ff7c3a'],[KT.ny,'NY Peak','#ff5c7a'],[KT.lc,'London Close','#ffb800']].map(([t,l,c])=>(
+              <div key={t+l} className="info-row"><span className="i-t" style={{color:c}}>{t}</span><span className="i-l">{l}</span></div>
+            ))}
+          </div>
+          <div className="info-card" style={{borderColor:'rgba(255,184,0,0.14)'}}>
+            <div className="info-hd" style={{color:'#ffd060'}}><IC.Up/> Session Transitions</div>
+            {[[KT.as,'Asia Opens','#ffb800'],[KT.tl,'Tokyo → London','#38d0ff'],[KT.nov,'London → NY','#ff7c3a'],[KT.nc,'NY Close / Reset','#9b6dff']].map(([t,l,c])=>(
+              <div key={t+l} className="info-row"><span className="i-t" style={{color:c}}>{t}</span><span className="i-l">{l}</span></div>
+            ))}
+          </div>
+          <div className="info-card" style={{borderColor:'rgba(155,109,255,0.14)'}}>
+            <div className="info-hd" style={{color:'#b490ff'}}><IC.Info/> Candle Guide</div>
+            {[['2H','#00e087','Scalp & quick intraday entries. Best at London Open & NY Overlap.'],['3H','#38d0ff','Intraday swing. Aligns well with session transitions.'],['4H','#9b6dff','Trend confirmation & daily bias — higher timeframe context.']].map(([tf,c,tip])=>(
+              <div key={tf} className="info-row" style={{alignItems:'flex-start'}}>
+                <span className="i-t" style={{color:c,minWidth:'26px'}}>{tf}</span>
+                <span className="i-l" style={{textAlign:'right',lineHeight:1.45,fontSize:'10px'}}>{tip}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="footer">
+          ✦ Both UTC+2 and UTC+3 — all candles open from <span style={{color:'var(--green)',fontWeight:700}}>00:00</span>
+          &nbsp;·&nbsp; <span style={{color:'var(--amber)'}}>Amber = NOW</span>
+          &nbsp;·&nbsp; <span style={{color:'var(--orange)'}}>Orange = NEXT</span>
+          &nbsp;·&nbsp; NOW + NEXT always visible above the table
+          &nbsp;·&nbsp; Default: UTC+3
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+ReactDOM.render(<App/>, document.getElementById('root'));
+</script>
 </body>
 </html>
